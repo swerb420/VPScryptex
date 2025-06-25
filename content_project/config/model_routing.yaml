@@ -1,0 +1,65 @@
+# Windmill Configuration: /config/model_routing.yaml
+# Description: Central configuration for model selection, prompts, and system behavior.
+# This file should be loaded by the main workflow and its values passed to the scripts.
+
+# --- Global Settings ---
+system_settings:
+  default_approval_required: true # Require Telegram approval for all posts by default
+  default_posting_service: "buffer" # 'buffer' or 'telegram'
+
+# --- Model & Engine Routing ---
+# The smart_router uses this to decide which models to use for classification.
+router:
+  classification_model: "gpt-4-turbo"
+  system_prompt: >
+    You are an intelligent routing agent. Your task is to analyze the user's prompt
+    and classify it into one of the following categories: "image", "video", "caption", "news_commentary", or "comment_reply".
+    You must respond with a single, valid JSON object with keys "engine" and "params".
+    - For "image": extract 'prompt' and optional 'style'.
+    - For "video": extract 'prompt' and optional 'duration'.
+    - For "caption": extract 'topic' and optional 'tone'.
+    - For "news_commentary": extract 'topic' or 'article_url'.
+    - For "comment_reply": extract 'comment_text', 'comment_author', and 'original_post_context'.
+
+# --- Generation Engine Specifics ---
+# Defines the primary and fallback models for each generation task.
+# The 'ai_switcher' will test models in this order.
+engines:
+  caption:
+    primary_model: "gpt-4-turbo"
+    fallback_models:
+      - "claude-3-opus-20240229"
+      - "gemini-1.5-pro-latest"
+    default_tone: "casual"
+    default_platform: "instagram"
+
+  image:
+    provider: "fal_ai" # 'fal_ai', 'openai'
+    # Fal.ai uses specific model paths
+    model: "fal-ai/sdxl"
+    # OpenAI would use 'dall-e-3'
+    # model_openai: "dall-e-3"
+    default_style: "photorealistic, cinematic lighting, 8k, high detail"
+
+  video:
+    provider: "google_vertex_ai" # 'google_vertex_ai', 'runway', etc.
+    model: "imagenvideo-001" # Hypothetical model name
+    default_fps: 24
+
+  news_commentary:
+    search_provider: "google_search" # 'perplexity', 'grok', etc.
+    generation_model: "claude-3-opus-20240229"
+    system_prompt: "You are a sharp, insightful news analyst. Write a brief commentary on the provided article, highlighting the key takeaway."
+
+  comment_reply:
+    model: "claude-3-sonnet-20240229"
+    system_prompt: "You are a friendly and helpful social media manager. Your goal is to write positive, engaging, and non-confrontational replies."
+
+# --- Logging & Notifications ---
+logging:
+  google_sheet_id: "YOUR_GOOGLE_SHEET_ID_HERE"
+  main_log_worksheet: "MasterLog"
+  feedback_worksheet: "Feedback"
+
+notifications:
+  telegram_admin_chat_id: "YOUR_ADMIN_CHAT_ID_HERE" # For approvals and system alerts

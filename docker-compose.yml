@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:14
+    container_name: cryptex_postgres
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=windmill
+      - POSTGRES_PASSWORD=windmill
+      - POSTGRES_DB=windmill
+
+  windmill:
+    image: ghcr.io/windmill-labs/windmill:main
+    container_name: cryptex_windmill
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    ports:
+      - "8088:8000"
+    volumes:
+      # Mounting both project folders into the container
+      - ./cryptex_project:/usr/src/app/cryptex_project
+      - ./content_project:/usr/src/app/content_project
+    environment:
+      - DATABASE_URL=postgresql://windmill:windmill@postgres:5432
+      - WINDMILL_HOSTNAME=http://localhost:8088
+
+volumes:
+  pgdata:

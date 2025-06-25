@@ -1,0 +1,22 @@
+summary: Triggered by a webhook when a user replies to an approval message in Telegram.
+trigger:
+  webhook: {} # You will get the URL for this from the Windmill UI
+steps:
+  - id: process_response
+    summary: Process the approval/rejection from the Telegram webhook payload.
+    script:
+      path: ../scripts/telegram_bots/s_telegram_approval_responder.py
+      inputs:
+        webhook_payload: u/trigger # Pass the entire webhook payload to the script
+        
+  - id: check_if_approved
+    summary: If the decision was 'approved', publish the content.
+    if:
+      - condition:
+          javascript: return results.process_response.decision === 'approved'
+        steps:
+          - id: publish_to_platforms
+            script:
+              path: ../scripts/publication/s_post_to_platforms.py
+              inputs:
+                draft: u/results.process_response.draft_to_publish

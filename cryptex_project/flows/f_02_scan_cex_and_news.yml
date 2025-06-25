@@ -1,0 +1,23 @@
+summary: Runs every minute to scan CEX trades and News APIs for new events.
+trigger:
+  schedule:
+    cron: "* * * * *" # Runs every minute
+steps:
+  - id: parallel_scans
+    summary: Run the CEX and News monitors at the same time.
+    parallel:
+      - id: scan_cex
+        steps:
+          - id: run_cex_script
+            script: ../scripts/s_cex_trader_monitor.py
+      - id: scan_news
+        steps:
+          - id: run_news_script
+            script: ../scripts/s_news_monitor.py
+  - id: run_correlator
+    summary: Call the correlation engine with any assets found in the scans.
+    script:
+      path: ../scripts/s_correlation_engine.py
+      inputs:
+        # This combines the lists of assets from both parallel branches
+        assets_to_check: u/ [...results.parallel_scans.scan_cex.run_cex_script, ...results.parallel_scans.scan_news.run_news_script]
