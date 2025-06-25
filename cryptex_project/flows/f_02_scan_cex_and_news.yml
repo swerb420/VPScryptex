@@ -1,23 +1,31 @@
-summary: Runs every minute to scan CEX trades and News APIs for new events.
+summary: Runs every minute to scan for trades and news, then runs the AI Signal Engine.
 trigger:
   schedule:
     cron: "* * * * *" # Runs every minute
+
 steps:
   - id: parallel_scans
-    summary: Run the CEX and News monitors at the same time.
+    summary: Fetch latest trades and news catalysts simultaneously.
     parallel:
       - id: scan_cex
-        steps:
-          - id: run_cex_script
-            script: ../scripts/s_cex_trader_monitor.py
+        script: ../scripts/s_cex_trader_monitor.py
       - id: scan_news
-        steps:
-          - id: run_news_script
-            script: ../scripts/s_news_monitor.py
-  - id: run_correlator
-    summary: Call the correlation engine with any assets found in the scans.
+        script: ../scripts/s_news_monitor.py
+
+  - id: run_signal_engine
+    summary: Run the main AI analysis and correlation engine.
+    # This is the only change needed. We are calling the new script.
     script:
-      path: ../scripts/s_correlation_engine.py
-      inputs:
-        # This combines the lists of assets from both parallel branches
-        assets_to_check: u/ [...results.parallel_scans.scan_cex.run_cex_script, ...results.parallel_scans.scan_news.run_news_script]
+      path: ../scripts/s_ai_signal_engine.py
+      # This script now reads from the database directly, so it needs no inputs.
+
+  - id: alert_loop
+    summary: For each validated signal found by the engine, send an alert.
+    for_loop:
+      iterator: u/results.run_signal_engine
+      steps:
+        - id: send_telegram_alert
+          script:
+            path: ../scripts/s_telegram_alerter.py
+            inputs:
+              signal: u/item
