@@ -1,22 +1,32 @@
-summary: Triggered by a webhook when a user replies to an approval message in Telegram.
+summary: Listens for approval/rejection messages from Telegram and acts accordingly.
+# You will get a unique URL for this webhook from the Windmill UI to give to your bot.
 trigger:
-  webhook: {} # You will get the URL for this from the Windmill UI
+  webhook: {} 
 steps:
-  - id: process_response
-    summary: Process the approval/rejection from the Telegram webhook payload.
+  - id: process_telegram_reply
+    summary: Process the incoming command from the Telegram webhook.
     script:
       path: ../scripts/telegram_bots/s_telegram_approval_responder.py
       inputs:
-        webhook_payload: u/trigger # Pass the entire webhook payload to the script
-        
+        webhook_payload: u/trigger # Windmill automatically passes the webhook data here
+
   - id: check_if_approved
     summary: If the decision was 'approved', publish the content.
     if:
-      - condition:
-          javascript: return results.process_response.decision === 'approved'
+      - condition: javascript: return results.process_telegram_reply.decision === 'approved'
         steps:
-          - id: publish_to_platforms
+          - id: publish_to_buffer
+            summary: Sending to Buffer for scheduled posting...
             script:
-              path: ../scripts/publication/s_post_to_platforms.py
+              path: ../scripts/publication/s_post_to_buffer.py
               inputs:
-                draft: u/results.process_response.draft_to_publish
+                post_text: u/results.process_telegram_reply.draft.post_text
+                media_url: u/results.process_telegram_reply.draft.image_url
+                # Other inputs like profile_ids would be passed in here
+      - else:
+          - id: log_rejection
+            summary: Logging rejected draft for later review.
+            script:
+              path: ../scripts/meta/s_log_to_google_sheets.py
+              inputs:
+                log_data: u/results.process_telegram_reply

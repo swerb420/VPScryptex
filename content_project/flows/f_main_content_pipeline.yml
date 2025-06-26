@@ -1,19 +1,17 @@
-summary: Master Content Pipeline - Handles new prompts, routes, creates, and sends for approval.
-# This flow is triggered by other scripts (like your webhook or manual UI)
-# It expects an input called 'user_prompt'
+summary: Master Content Pipeline - Triggered by a new prompt. Routes, creates, and sends for approval.
+# This flow expects an input named 'user_prompt' from the triggering script.
 steps:
   - id: load_config
-    summary: Load the master YAML config file.
+    summary: Load the master YAML configuration file.
     script:
       language: python
       content: |
         import yaml
         with open("/usr/src/app/content_project/config/model_routing.yaml", "r") as f:
-            print("INFO: Loading model_routing.yaml config...")
             return yaml.safe_load(f)
 
   - id: smart_router
-    summary: Classify the prompt's intent.
+    summary: Classify intent and extract parameters from the user prompt.
     script:
       path: ../scripts/router/s_smart_router.ts
       inputs:
@@ -22,36 +20,44 @@ steps:
         openai_api_key: u/secrets.OPENAI_API_KEY
   
   - id: content_engine_branch
-    summary: Execute the correct content generation engine.
+    summary: Execute the correct content generation engine based on the router's decision.
     if:
-      - condition:
-          javascript: return results.smart_router.engine === 'image'
+      - condition: javascript: return results.smart_router.engine === 'image'
         steps:
           - id: generate_image
-            script: ../scripts/engines/s_generate_image.py
-            # inputs: u/results.smart_router.params # a more advanced setup
-      # ... add more conditions here for 'caption', 'blog_post', etc.
+            script: 
+              path: ../scripts/engines/s_generate_image.py
+              inputs: u/results.smart_router.params
+      - condition: javascript: return results.smart_router.engine === 'caption'
+        steps:
+          - id: generate_caption
+            script:
+              path: ../scripts/engines/s_generate_caption.py
+              inputs: u/results.smart_router.params
+      - condition: javascript: return results.smart_router.engine === 'news_commentary'
+        steps:
+          - id: generate_news_commentary
+            script:
+              path: ../scripts/engines/s_generate_news_commentary.py
+              inputs: u/results.smart_router.params
       - else:
           - id: unknown_engine
-            script: ../scripts/engines/s_generate_blog_post.py # Default to blog post for now
-            inputs:
-              idea: { title: "New Idea", concept: u/inputs.user_prompt, hook: "A new hook" }
-              
+            fail: "The smart_router returned an unknown engine type."
+
   - id: quality_gate
-    summary: Run the draft through the AI quality check.
+    summary: Run the generated content draft through the AI quality check.
     script:
       path: ../scripts/meta/s_ai_quality_gate.py
       inputs:
-        generated_script: u/results.content_engine_branch.article_markdown # Path to the generated text
+        generated_content: u/results.content_engine_branch
 
   - id: request_human_approval
-    summary: If quality gate passes, send for human approval.
+    summary: If the quality gate passes, send the draft for human approval via Telegram.
     if:
-      - condition:
-          javascript: return results.quality_gate.decision === 'pass'
+      - condition: javascript: return results.quality_gate.decision === 'pass'
         steps:
-          - id: send_approval_telegram
-            script: ../scripts/publication/s_request_approval.py
-            inputs:
-              # We need to create the draft object first
-              content_draft: u/results.content_engine_branch
+          - id: send_telegram_request
+            script:
+              path: ../scripts/publication/s_request_approval.py
+              inputs:
+                content_draft: u/results.quality_gate.content_with_id # Assume quality gate adds a unique ID
