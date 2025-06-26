@@ -1,8 +1,7 @@
 summary: The master scheduled pipeline for the Cryptex AI Signal Engine.
 trigger:
   schedule:
-    cron: "*/2 * * * *" # Runs every 2 minutes
-
+    cron: "*/2 * * * *"
 steps:
   - id: parallel_scans
     summary: Fetch latest trades and news catalysts simultaneously.
@@ -11,20 +10,16 @@ steps:
         script: ../scripts/monitors/s_cex_trader_monitor.py
       - id: scan_news
         script: ../scripts/monitors/s_news_monitor.py
-  
   - id: run_assessment_engine
     summary: Run the main AI analysis and historical assessment engine.
-    # This single script now handles correlation and the full analysis pipeline.
     script:
       path: ../scripts/intelligence/s_assessment_engine.py
-
   - id: alert_loop
-    summary: For each validated, high-confidence signal, send a Telegram alert.
+    summary: For each validated, high-confidence signal, send an alert.
     for_loop:
       iterator: u/results.run_assessment_engine
       steps:
         - id: check_confidence
-          summary: Only alert on signals with confidence > 85
           if:
             - condition:
                 javascript: return item.ai_confidence_score >= 85

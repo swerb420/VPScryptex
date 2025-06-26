@@ -1,5 +1,4 @@
 summary: Master Content Pipeline - Triggered by a new prompt. Routes, creates, and sends for approval.
-# This flow expects an input named 'user_prompt' from the triggering script.
 steps:
   - id: load_config
     summary: Load the master YAML configuration file.
@@ -9,7 +8,6 @@ steps:
         import yaml
         with open("/usr/src/app/content_project/config/model_routing.yaml", "r") as f:
             return yaml.safe_load(f)
-
   - id: smart_router
     summary: Classify intent and extract parameters from the user prompt.
     script:
@@ -18,46 +16,23 @@ steps:
         user_prompt: u/inputs.user_prompt
         config_yaml_string: u/JSON.stringify(results.load_config)
         openai_api_key: u/secrets.OPENAI_API_KEY
-  
   - id: content_engine_branch
-    summary: Execute the correct content generation engine based on the router's decision.
+    summary: Execute the correct content generation engine.
     if:
-      - condition: javascript: return results.smart_router.engine === 'image'
+      - condition:
+          javascript: return results.smart_router.engine === 'image'
         steps:
           - id: generate_image
-            script: 
+            script:
               path: ../scripts/engines/s_generate_image.py
               inputs: u/results.smart_router.params
-      - condition: javascript: return results.smart_router.engine === 'caption'
+      - condition:
+          javascript: return results.smart_router.engine === 'caption'
         steps:
           - id: generate_caption
             script:
               path: ../scripts/engines/s_generate_caption.py
               inputs: u/results.smart_router.params
-      - condition: javascript: return results.smart_router.engine === 'news_commentary'
-        steps:
-          - id: generate_news_commentary
-            script:
-              path: ../scripts/engines/s_generate_news_commentary.py
-              inputs: u/results.smart_router.params
       - else:
           - id: unknown_engine
             fail: "The smart_router returned an unknown engine type."
-
-  - id: quality_gate
-    summary: Run the generated content draft through the AI quality check.
-    script:
-      path: ../scripts/meta/s_ai_quality_gate.py
-      inputs:
-        generated_content: u/results.content_engine_branch
-
-  - id: request_human_approval
-    summary: If the quality gate passes, send the draft for human approval via Telegram.
-    if:
-      - condition: javascript: return results.quality_gate.decision === 'pass'
-        steps:
-          - id: send_telegram_request
-            script:
-              path: ../scripts/publication/s_request_approval.py
-              inputs:
-                content_draft: u/results.quality_gate.content_with_id # Assume quality gate adds a unique ID
